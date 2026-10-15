@@ -52,6 +52,17 @@ const ok = await call("tools/call", {
 });
 assert.equal(ok.result.isError, undefined);
 assert.match(ok.result.content[0].text, /ROUNDTRIP taskSpace/);
+assert.equal(ok.result.content.length, 1, "no guide when the script starts no task");
+
+// The task-start check reads the script text only, so a comment exercises it without touching the browser.
+const guideFor = async (script) =>
+  (await call("tools/call", { name: "ego_run_script", arguments: { script } })).result.content;
+for (const start of ['taskSpace("x")', "claimTaskSpace(7)", "takeOverTaskSpace(7)", "listTaskSpaces()"]) {
+  const content = await guideFor(`console.log(1) // ${start}`);
+  assert.equal(content.length, 2, `guide attached for ${start}`);
+  assert.match(content[1].text, /name: ego-browser/, "guide carries SKILL.md");
+}
+assert.equal((await guideFor("console.log(1) // taskSpace(23)")).length, 1, "no guide on resume");
 
 const failed = await call("tools/call", {
   name: "ego_run_script",

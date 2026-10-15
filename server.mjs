@@ -1,11 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { z } from "zod";
 
 const BIN = process.env.EGO_BROWSER_BIN || "ego-browser";
-const SKILL = `${homedir()}/.agents/skills/ego-browser/SKILL.md`;
+const SKILL_DIR = `${homedir()}/.agents/skills/ego-browser`;
+const SKILL = `${SKILL_DIR}/SKILL.md`;
+// 作業の開始＝新しいタスクスペースの作成か、利用者のスペースへの介入。taskSpace(23) の再開は含まない。
+// ponytail: literal match; taskSpace(nameVar) slips through. The description steers first calls to a literal.
+const STARTS_TASK = /\btaskSpace\(\s*["'`]|\b(?:listTaskSpaces|claimTaskSpace|takeOverTaskSpace)\s*\(/;
 const TIMEOUT_MS = 180_000;
 const MAX_CHARS = 100_000;
 
@@ -16,6 +21,21 @@ const cap = (s) =>
   s.length <= MAX_CHARS
     ? s
     : `${s.slice(0, MAX_CHARS)}\n\n[truncated at ${MAX_CHARS} of ${s.length} chars. Narrow the output: page.snapshot({ scope: "subtree", root: "@N" }), or extract just what you need with page.evaluate().]`;
+
+// SKILL.md は CLI 前提で書かれているため、MCP 経由での読み替えを前置きする。
+async function guide() {
+  const preamble = `ego-browser operating guide (SKILL.md), attached because this call started a task. Follow it for the rest of the task. You are using it through MCP, so read it this way:
+- Where it says to run \`ego-browser nodejs\` with a heredoc or -e, pass the same JavaScript as this tool's \`script\` argument. Ignore the shell quoting notes.
+- Relative paths such as references/api.md are under ${SKILL_DIR}. Read them with node:fs inside a script.
+- You cannot view saved screenshot files here. Observe pages with snapshot() instead of screenshot().
+
+`;
+  try {
+    return preamble + (await readFile(SKILL, "utf8"));
+  } catch (e) {
+    return `Could not read the operating guide at ${SKILL} (${e.code}). Run console.log(await help()) for the API reference.`;
+  }
+}
 
 function runScript(script) {
   return new Promise((resolve) => {
@@ -40,11 +60,11 @@ function runScript(script) {
         // ego-browser の埋め込み Node は console.log を stderr に書く。
         // 成功時の出力もここに来るため、stderr を異常扱いせず連結する。
         const out = stdout + stderr;
-        resolve({
-          content: [
-            { type: "text", text: cap(out.trim() || "(no output — the script must console.log() what it wants back)") },
-          ],
-        });
+        const content = [
+          { type: "text", text: cap(out.trim() || "(no output — the script must console.log() what it wants back)") },
+        ];
+        if (STARTS_TASK.test(script)) guide().then((text) => resolve({ content: [...content, { type: "text", text }] }));
+        else resolve({ content });
       },
     );
     // A failed spawn makes writes to stdin emit EPIPE; swallow it so the
@@ -62,18 +82,12 @@ server.registerTool(
     title: "Run a script in the ego lite browser",
     description: `Run JavaScript in ego lite, a Chromium browser holding the user's own logged-in sessions. Use it to open pages, read their content, fill forms, click, and take screenshots.
 
-The script runs in Node.js (ESM, top-level await), NOT inside the page. window/document/location are unavailable here; put page-side code inside page.evaluate(). console.log() is the only way to return data. Variables do not survive between calls, but task spaces and pages do.
+The script runs in Node.js (ESM, top-level await), NOT inside the page. window/document/location are unavailable here; put page-side code inside page.evaluate(). console.log() is the only way to return data.
 
-First call in a session: run \`console.log(await help())\` for the full API reference (~15k chars), or \`help("taskSpace")\` for one entry. Read the operating conventions once with:
-  const fs = await import("node:fs/promises");
-  console.log(await fs.readFile(${JSON.stringify(SKILL)}, "utf8"));
-
-Minimum to get going:
+Start every user goal with a call that only creates the task space and prints its id:
   const task = await taskSpace("what the user asked for");
-  const page = task.page("p1");
-  await page.goto("https://example.com");
-  console.log(task.spaceId, await page.snapshot());
-Print spaceId so later calls can resume with taskSpace(id). Use one task space per user goal. When the goal is done, call await task.finish({ keep: [] }) exactly once.
+  console.log(task.spaceId);
+That call also returns the operating guide. Read it before doing anything else. Later calls resume with taskSpace(id). The API reference is console.log(await help()).
 
 These are the user's real logged-in accounts. Anything that sends, posts, buys, or deletes is irreversible and takes their identity. Never perform such an action unless the user asked for that specific action in this conversation; hand control back with await task.handOff() instead.`,
     inputSchema: { script: z.string().describe("JavaScript to execute. Use console.log() to return results.") },
