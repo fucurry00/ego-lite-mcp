@@ -467,8 +467,8 @@ MCP サーバに <code>test.mjs</code> と同じ形で接続し、同じ 5 つ�
 <h3>1. Claude Desktop の設定パスを直す（修正済み）</h3>
 
 <p>
-<code>claude_desktop_config.json</code> と README の設定例は、<code>/Users/kentaro/dev/ego-lite/server.mjs</code> を指している。
-リポジトリの実際の場所は <code>/Users/kentaro/dev/agents/ego-lite</code> である。
+<code>claude_desktop_config.json</code> と README の設定例は、<code>~/dev/ego-lite/server.mjs</code> を指している。
+リポジトリの実際の場所は <code>~/dev/agents/ego-lite</code> である。
 <code>~/Library/Logs/Claude/mcp-server-ego-lite.log</code> によると、最後に起動に成功したのは 2026-10-14 14:01 (UTC) で、15:41 以降は <code>Cannot find module</code> で毎回失敗していた。
 2026-10-15 に次の修正を行い、04:51 (UTC) に起動成功のログを確認した。
 あわせて、MCP 経由で TaskSpace の作成、example.com への移動、<code>finish()</code> までが通ることも確かめた。
@@ -476,9 +476,9 @@ MCP サーバに <code>test.mjs</code> と同じ形で接続し、同じ 5 つ�
 
 <pre class="mb-diff"><code class="nohighlight"><span class="ctx">"ego-lite": {</span>
 <span class="ctx">  "command": "node",</span>
-<span class="del">  "args": ["/Users/kentaro/dev/ego-lite/server.mjs"],</span>
-<span class="add">  "args": ["/Users/kentaro/dev/agents/ego-lite/server.mjs"],</span>
-<span class="ctx">  "env": { "EGO_BROWSER_BIN": "/Users/kentaro/.local/bin/ego-browser" }</span>
+<span class="del">  "args": ["/Users/&lt;user&gt;/dev/ego-lite/server.mjs"],</span>
+<span class="add">  "args": ["/Users/&lt;user&gt;/dev/agents/ego-lite/server.mjs"],</span>
+<span class="ctx">  "env": { "EGO_BROWSER_BIN": "/Users/&lt;user&gt;/.local/bin/ego-browser" }</span>
 <span class="ctx">}</span></code></pre>
 
 <h3>2. 説明文で「spaceId を最初に出力する」を強める</h3>
@@ -515,7 +515,7 @@ URL を受け取り、<code>goto()</code> と <code>snapshot()</code> を行っ�
 <ul>
   <li>出力が 32MB の <code>maxBuffer</code> を超えたときも「ego lite が起動していない可能性」と表示される。README にも記載済みの既知の問題である</li>
   <li><code>learnings/</code> は旧 API で書かれている。MCP の説明文から案内していないので害はないが、モデルがディレクトリを探索して読んだ場合に誤った API を覚える可能性がある</li>
-  <li>README の「導入」の設定例は、まだ移動前のパス（<code>/Users/kentaro/dev/ego-lite/server.mjs</code>）のままである</li>
+  <li>README の「導入」の設定例は、まだ移動前のパス（<code>~/dev/ego-lite/server.mjs</code>）のままである</li>
 </ul>
 
 <!-- ============================================================ -->
