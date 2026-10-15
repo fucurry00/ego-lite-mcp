@@ -132,7 +132,7 @@ ego-browser の埋め込み Node は、`console.log()` の出力を標準出力�
 デスクトップアプリが起動した子プロセスから ego lite の内部サービスに到達できており、懸念していたサンドボックスの制約には当たらなかった。
 第 2 段階では example.com を開き、スナップショットを取得し、`finish({ keep: [] })` でタスクスペースを閉じるところまで通っている。
 
-2026-10-15 の比較検証（起動コスト、まとめ実行と分割実行の所要時間）は [20261015-ego-lite-control-layer.html](20261015-ego-lite-control-layer.html) にある。
+2026-10-15 の比較検証（起動コスト、まとめ実行と分割実行の所要時間）は [ego-lite-control-layer.md](ego-lite-control-layer.md) にある。
 この解説は SKILL.md 添付の導入前に書いたもので、ツール説明文の記述はその時点のものである。
 
 ## 未検証事項
