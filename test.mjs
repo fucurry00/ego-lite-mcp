@@ -74,7 +74,7 @@ const guideFor = async (script) =>
 for (const start of ['taskSpace("x")', "claimTaskSpace(7)", "takeOverTaskSpace(7)", "listTaskSpaces()"]) {
   const content = await guideFor(`console.log(1) // ${start}`);
   assert.equal(content.length, 2, `guide attached for ${start}`);
-  assert.match(content[1].text, /name: ego-browser/, "guide carries SKILL.md");
+  assert.match(content[1].text, /^\[ego-browser:skill\] end of guide v/m, "guide carries the whole usage guide");
 }
 assert.equal((await guideFor("console.log(1) // taskSpace(23)")).length, 1, "no guide on resume");
 

@@ -43,10 +43,11 @@ JavaScript のソース文字列を受け取り、そのまま `ego-browser node
 しかし ego-browser の実行環境には `help()` が組み込まれており、API の説明文を実行時に返すため、この欠点は成立しない。
 
 ```bash
-ego-browser nodejs -e 'console.log(await help())'             # 全 API、14,603 文字
-ego-browser nodejs -e 'console.log(await help("taskSpace"))'  # 1 項目のみ
+ego-browser nodejs -e 'await help()'             # 全 API、14,603 文字
+ego-browser nodejs -e 'await help("taskSpace")'  # 1 項目のみ
 ```
 
+`help()` は自分で出力したうえで同じ文字列を返すので、`console.log()` で包むと 2 回出力される。
 ツールの説明文には `await help()` を呼ぶよう指示するだけでよい。
 本体が `ego-browser upgrade` で新しくなれば、返る内容も自動的に新しくなる。
 
@@ -55,8 +56,9 @@ ego-browser nodejs -e 'console.log(await help("taskSpace"))'  # 1 項目のみ
 実際にインストールされていた ego-browser（公式スキル文書は version 2.0.0、2026-09-09 付）の API は `taskSpace()` / `task.page()` / `page.goto()` / `page.snapshot()` / `console.log()` であり、一致しなかった。
 名前が違うだけでなく、実物はページ単位の操作、ポップアップとダイアログの受領情報、ファイルのダウンロード、ユーザーへの操作権の受け渡し（`handOff()`）まで含む。
 
-運用上の約束事（1 ゴールにつき 1 タスクスペース、観測は必要最小限、完了時の `finish({ keep: [] })` など）は `help()` には含まれず、`~/.agents/skills/ego-browser/SKILL.md` にのみある。
-これも複製せず、作業の開始時にサーバが実行時に読み出して結果に添付する（次節）。
+運用上の約束事（1 ゴールにつき 1 タスクスペース、観測は必要最小限、完了時の `finish({ keep: [] })` など）は `help()` には含まれず、`ego-browser skill` の出力（手順の本文）にのみある。
+`~/.agents/skills/ego-browser/SKILL.md` は、version 2.1.0 から「`ego-browser skill` を実行してその出力に従え」という案内だけになった。
+これも複製せず、作業の開始時にサーバが `ego-browser skill` を実行し、その出力を結果に添付する（次節）。
 
 ## 運用手順は作業の開始時に結果へ添付する
 
@@ -65,7 +67,8 @@ ego-browser nodejs -e 'console.log(await help("taskSpace"))'  # 1 項目のみ
 `page.screenshot?.()` のように API の有無を疑う書き方や、Chat からは見られない `/tmp` への画像保存が出ていた。
 説明文に動く最小例があると、案内は読み飛ばされる。
 
-そこで、作業の開始にあたる呼び出しでは、サーバが SKILL.md 本文を結果に付けて返す。
+そこで、作業の開始にあたる呼び出しでは、サーバが手順の本文（`ego-browser skill` の出力）を結果に付けて返す。
+SKILL.md のファイルを添付していた時期もあるが、SKILL.md が案内だけになったため、シェルのない Chat/Cowork では従えなくなった（https://github.com/fucurry00/ego-lite-mcp/issues/10）。
 作業の開始は、スクリプトに次のいずれかを含む呼び出しとする。
 
 - `taskSpace("…")`（文字列での新規作成）
@@ -80,17 +83,17 @@ Claude Desktop はサーバの 1 プロセスを複数の会話で使い回す�
 
 採らなかった案は次のとおり。
 
-- MCP の `instructions` に SKILL.md を入れる案。確実だが、ブラウザと無関係な会話にも約 2 万字が常に乗る。Code の skill は本文を起動時にしか読まないので、それより重い。
+- MCP の `instructions` に手順の本文を入れる案。確実だが、ブラウザと無関係な会話にも約 2 万字が常に乗る。Code の skill は本文を起動時にしか読まないので、それより重い。
 - 引数 `first_call` をモデルに申告させる案。判定がモデル任せになる。
 - 手順を返す専用ツールを足す案。呼ぶかどうかがモデル任せになる。
 
-SKILL.md は CLI 前提で書かれているため、添付時に MCP 用の読み替えを数行前置きする。
-heredoc の代わりに `script` 引数へ渡すこと、`references/` の絶対パス、保存した画像は見られないので `snapshot()` で観測すること、の 3 点である。
+手順の本文は CLI 前提で書かれているため、添付時に MCP 用の読み替えを数行前置きする。
+heredoc などの代わりに `script` 引数へ渡すこと、`ego-browser upgrade` などほかのコマンドは利用者に実行を頼むこと、`references/` の絶対パス、保存した画像は見られないので `snapshot()` で観測すること、の 4 点である。
 画像を結果に添付する機能は https://github.com/fucurry00/ego-lite-mcp/issues/1 に残してある。
 
 Desktop の Code タブでは、`~/.claude/skills/ego-browser`（ego lite のオンボーディングが作る）と、この MCP の両方が見える。
 どちらを使っても手順は届くので、片方を外す設定はしていない。
-両方を使うと SKILL.md が 2 回読み込まれるが、それは許容している。
+両方を使うと手順の本文が 2 回読み込まれるが、それは許容している。
 
 ## 危険操作の扱い
 
@@ -138,6 +141,6 @@ ego-browser の埋め込み Node は、`console.log()` の出力を標準出力�
 
 ## 未検証事項
 
-- Chat/Cowork のモデルが、添付された SKILL.md に実際に従うか。
+- Chat/Cowork のモデルが、添付された手順の本文に実際に従うか。
 - ego lite を実際に終了させた状態でのエラー文言。
 - Claude Desktop の承認画面に、スクリプト全文が実際にどう表示されるか。「危険操作の扱い」の方針は、これが読める前提に立っている。
