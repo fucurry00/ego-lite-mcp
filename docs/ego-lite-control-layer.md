@@ -54,7 +54,7 @@ Claude Desktop の Chat / Cowork にはシェルを実行する手段がない�
 
 ### ディレクトリ構成
 
-`~/.agents/skills/ego-browser`（リポジトリでは `ego-browser-skill` というシンボリックリンク）の中身は次のとおりである。
+`~/.agents/skills/ego-browser` の中身は次のとおりである。
 
 | パス | 役割 |
 |---|---|

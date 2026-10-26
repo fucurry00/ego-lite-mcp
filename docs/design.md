@@ -25,8 +25,10 @@ CLI を起動するだけの薄いサーバで成立する。
 |---|---|
 | `server.mjs` | MCP サーバ本体 |
 | `test.mjs` | 標準入出力越しの疎通確認 |
-| `ego-browser-skill` | `~/.agents/skills/ego-browser` へのシンボリックリンク（複製ではない） |
 | `docs/` | 設計文書と解説 |
+
+手元では、リポジトリ直下に `~/.agents/skills/ego-browser` へのシンボリックリンク `ego-browser-skill` を置いてもよい。
+リンク先が利用者のホームディレクトリの絶対パスになるため、`.gitignore` で追跡から外している。
 
 ## ツールは `ego_run_script` の 1 本のみ
 
@@ -55,7 +57,6 @@ ego-browser nodejs -e 'console.log(await help("taskSpace"))'  # 1 項目のみ
 
 運用上の約束事（1 ゴールにつき 1 タスクスペース、観測は必要最小限、完了時の `finish({ keep: [] })` など）は `help()` には含まれず、`~/.agents/skills/ego-browser/SKILL.md` にのみある。
 これも複製せず、作業の開始時にサーバが実行時に読み出して結果に添付する（次節）。
-リポジトリ内の `ego-browser-skill` は、このディレクトリへのシンボリックリンクである。
 
 ## 運用手順は作業の開始時に結果へ添付する
 
