@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { execFile } from "node:child_process";
-import { readFile, readdir } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { z } from "zod";
 
@@ -98,7 +98,11 @@ These are the user's real logged-in accounts. Anything that sends, posts, buys, 
 
 const savedNames = async () => {
   try {
-    return (await readdir(SCRIPTS_DIR)).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).filter((n) => NAME.test(n)).sort();
+    return (await readdir(SCRIPTS_DIR, { withFileTypes: true }))
+      .filter((d) => d.isFile() && d.name.endsWith(".js"))
+      .map((d) => d.name.slice(0, -3))
+      .filter((n) => NAME.test(n))
+      .sort();
   } catch (e) {
     if (e.code === "ENOENT") return [];
     throw e;
@@ -120,6 +124,7 @@ Call with no name to list the saved scripts.`,
       name: z
         .string()
         .regex(NAME, "Use lowercase letters, digits, and hyphens only.")
+        .max(64)
         .optional()
         .describe("Saved script name, without .js. Omit to list them."),
     },
@@ -129,13 +134,22 @@ Call with no name to list the saved scripts.`,
   },
   async ({ name }) => {
     if (name === undefined) return { content: [{ type: "text", text: await listing() }] };
-    let script;
+    const file = `${SCRIPTS_DIR}/${name}.js`;
+    let stat;
     try {
-      script = await readFile(`${SCRIPTS_DIR}/${name}.js`, "utf8");
+      stat = await lstat(file);
     } catch (e) {
       if (e.code !== "ENOENT") throw e;
       return { content: [{ type: "text", text: `No saved script named "${name}". ${await listing()}` }], isError: true };
     }
+    // リンクの先は配置の承認を経ずに変わりうるので、コピーされた通常のファイルだけを実行する（ADR 0003）。
+    // ponytail: SCRIPTS_DIR itself being a link is not checked; the docs make that an operating rule.
+    if (!stat.isFile())
+      return {
+        content: [{ type: "text", text: `"${name}" is not a plain file. Saved scripts must be copied into ${SCRIPTS_DIR}, not linked.` }],
+        isError: true,
+      };
+    const script = await readFile(file, "utf8");
     // 保存済みスクリプトは最後まで自分で走るので、操作手順の添付は要らない。
     return runScript(script, false);
   },
