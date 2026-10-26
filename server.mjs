@@ -3,11 +3,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { execFile } from "node:child_process";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
+import { promisify } from "node:util";
 import { z } from "zod";
 
 const BIN = process.env.EGO_BROWSER_BIN || "ego-browser";
 const SKILL_DIR = `${homedir()}/.agents/skills/ego-browser`;
-const SKILL = `${SKILL_DIR}/SKILL.md`;
 // 保存済みスクリプトの実行用の場所。ここへの配置を利用者が承認する（ADR 0003）。
 const SCRIPTS_DIR = process.env.EGO_SCRIPTS_DIR || `${homedir()}/.config/ego-lite-mcp/scripts`;
 const NAME = /^[a-z0-9-]+$/;
@@ -22,18 +22,23 @@ const cap = (s) =>
     ? s
     : `${s.slice(0, MAX_CHARS)}\n\n[truncated at ${MAX_CHARS} of ${s.length} chars. Narrow the output: page.snapshot({ scope: "subtree", root: "@N" }), or extract just what you need with page.evaluate().]`;
 
-// SKILL.md は CLI 前提で書かれているため、MCP 経由での読み替えを前置きする。
+// SKILL.md 自体は「ego-browser skill を実行せよ」という案内だけなので、その出力（手順の本文）を添付する。
+// 本文は CLI 前提で書かれているため、MCP 経由での読み替えを前置きする。
 async function guide() {
-  const preamble = `ego-browser operating guide (SKILL.md), attached because this call started a task. Follow it for the rest of the task. You are using it through MCP, so read it this way:
-- Where it says to run \`ego-browser nodejs\` with a heredoc or -e, pass the same JavaScript as this tool's \`script\` argument. Ignore the shell quoting notes.
-- Relative paths such as references/api.md are under ${SKILL_DIR}. Read them with node:fs inside a script.
+  const preamble = `ego-browser usage guide (output of \`ego-browser skill\`), attached because this call started a task. Follow it for the rest of the task. You are using it through MCP, so read it this way:
+- Where it says to run \`ego-browser nodejs\` with a heredoc, -e, or a file, pass the same JavaScript as this tool's \`script\` argument. Ignore the shell quoting notes.
+- Other commands, such as \`ego-browser upgrade\`, need a shell. Ask the user to run them.
+- Relative paths such as references/install.md are under ${SKILL_DIR}. Read them with node:fs inside a script.
 - You cannot view saved screenshot files here. Observe pages with snapshot() instead of screenshot().
 
 `;
   try {
-    return preamble + (await readFile(SKILL, "utf8"));
+    const { stdout } = await promisify(execFile)(BIN, ["skill"], { timeout: 10_000 });
+    return preamble + stdout;
   } catch (e) {
-    return `Could not read the operating guide at ${SKILL} (${e.code}). Run console.log(await help()) for the API reference.`;
+    // 古い ego-browser には skill コマンドがない。その場合は更新を頼むよう伝える。
+    return `Could not get the usage guide from \`ego-browser skill\`: ${(e.stderr || e.message).trim()}
+If ego-browser is older than the skill command, ask the user to run \`ego-browser upgrade\`. Meanwhile, run await help() for the API reference.`;
   }
 }
 
@@ -87,7 +92,7 @@ The script runs in Node.js (ESM, top-level await), NOT inside the page. window/d
 Start every user goal with a call that only creates the task space and prints its id:
   const task = await taskSpace("what the user asked for");
   console.log(task.spaceId);
-That call also returns the operating guide. Read it before doing anything else. Later calls resume with taskSpace(id). The API reference is console.log(await help()).
+That call also returns the operating guide. Read it before doing anything else. Later calls resume with taskSpace(id). The API reference is await help(); it prints itself.
 
 These are the user's real logged-in accounts. Anything that sends, posts, buys, or deletes is irreversible and takes their identity. Never perform such an action unless the user asked for that specific action in this conversation; hand control back with await task.handOff() instead.`,
     inputSchema: { script: z.string().describe("JavaScript to execute. Use console.log() to return results.") },

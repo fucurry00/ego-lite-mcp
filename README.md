@@ -68,7 +68,7 @@ EGO_BROWSER_BIN="$(command -v ego-browser)" node test.mjs
 第 1 段階では、ブラウザ本体には接続せず、サーバの起動・`ego-browser` の発見・ツールの受け渡しだけを確かめる。
 
 ```js
-console.log(await help("taskSpace"))
+await help("taskSpace")
 ```
 
 第 2 段階では、実際にページを開いてタスクスペースを閉じる。
