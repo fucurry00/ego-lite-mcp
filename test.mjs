@@ -2,10 +2,24 @@
 // Run: node test.mjs
 import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// The taskSpace("x") comment in this script checks that a saved script never gets the guide attached.
+const scripts = mkdtempSync(join(tmpdir(), "ego-scripts-"));
+writeFileSync(join(scripts, "hello-1.js"), 'console.log("SAVED") // taskSpace("x")');
+writeFileSync(join(scripts, "notes.txt"), "not a script");
+writeFileSync(join(scripts, "Bad_Name.js"), "console.log(1)");
+// A link would let the script change after placement, so only plain files count.
+const outside = mkdtempSync(join(tmpdir(), "ego-outside-"));
+writeFileSync(join(outside, "target.js"), 'console.log("LINKED")');
+symlinkSync(join(outside, "target.js"), join(scripts, "linked.js"));
+mkdirSync(join(scripts, "folder.js"));
 
 const child = spawn("node", [new URL("server.mjs", import.meta.url).pathname], {
   stdio: ["pipe", "pipe", "inherit"],
-  env: { ...process.env, EGO_BROWSER_BIN: process.env.EGO_BROWSER_BIN ?? "ego-browser" },
+  env: { ...process.env, EGO_BROWSER_BIN: process.env.EGO_BROWSER_BIN ?? "ego-browser", EGO_SCRIPTS_DIR: scripts },
 });
 
 const pending = new Map();
@@ -42,7 +56,7 @@ notify("notifications/initialized");
 const list = await call("tools/list", {});
 assert.deepEqual(
   list.result.tools.map((t) => t.name),
-  ["ego_run_script"],
+  ["ego_run_script", "ego_run_saved_script"],
 );
 assert.ok(list.result.tools[0].inputSchema.properties.script, "script parameter is declared");
 
@@ -71,5 +85,38 @@ const failed = await call("tools/call", {
 assert.equal(failed.result.isError, true, "a throwing script is reported as an error");
 assert.match(failed.result.content[0].text, /boom/);
 
+const saved = async (args) => (await call("tools/call", { name: "ego_run_saved_script", arguments: args })).result;
+
+const listing = await saved({});
+assert.equal(listing.isError, undefined);
+assert.match(listing.content[0].text, /hello-1/, "omitting the name lists saved scripts");
+assert.doesNotMatch(listing.content[0].text, /notes/, "only .js files are scripts");
+assert.doesNotMatch(listing.content[0].text, /Bad_Name/, "names the tool would reject are not listed");
+assert.doesNotMatch(listing.content[0].text, /linked|folder/, "links and folders are not listed");
+
+for (const name of ["../hello-1", "Hello", "a/b", "a.js", "", "a".repeat(65)]) {
+  const bad = await saved({ name });
+  assert.equal(bad.isError, true, `rejects ${JSON.stringify(name)}`);
+  assert.doesNotMatch(bad.content[0].text, /SAVED/);
+}
+
+const missing = await saved({ name: "missing" });
+assert.equal(missing.isError, true, "an unknown name is an error");
+assert.match(missing.content[0].text, /hello-1/, "the error lists what exists");
+
+for (const name of ["linked", "folder"]) {
+  const refused = await saved({ name });
+  assert.equal(refused.isError, true, `refuses ${name}`);
+  assert.doesNotMatch(refused.content[0].text, /LINKED/);
+  assert.match(refused.content[0].text, /plain file/);
+}
+
+const ran = await saved({ name: "hello-1" });
+assert.equal(ran.isError, undefined);
+assert.match(ran.content[0].text, /SAVED/);
+assert.equal(ran.content.length, 1, "no guide for a saved script");
+
 child.kill();
+rmSync(scripts, { recursive: true });
+rmSync(outside, { recursive: true });
 console.log("all checks passed");

@@ -1,21 +1,21 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { z } from "zod";
 
 const BIN = process.env.EGO_BROWSER_BIN || "ego-browser";
 const SKILL_DIR = `${homedir()}/.agents/skills/ego-browser`;
 const SKILL = `${SKILL_DIR}/SKILL.md`;
+// 保存済みスクリプトの実行用の場所。ここへの配置を利用者が承認する（ADR 0003）。
+const SCRIPTS_DIR = process.env.EGO_SCRIPTS_DIR || `${homedir()}/.config/ego-lite-mcp/scripts`;
+const NAME = /^[a-z0-9-]+$/;
 // 作業の開始＝新しいタスクスペースの作成か、利用者のスペースへの介入。taskSpace(23) の再開は含まない。
 // ponytail: literal match; taskSpace(nameVar) slips through. The description steers first calls to a literal.
 const STARTS_TASK = /\btaskSpace\(\s*["'`]|\b(?:listTaskSpaces|claimTaskSpace|takeOverTaskSpace)\s*\(/;
 const TIMEOUT_MS = 180_000;
 const MAX_CHARS = 100_000;
-
-// ponytail: single passthrough tool. Splitting read-only from acting is the
-// planned next step if "always allow" ever becomes tempting for this tool.
 
 const cap = (s) =>
   s.length <= MAX_CHARS
@@ -37,7 +37,7 @@ async function guide() {
   }
 }
 
-function runScript(script) {
+function runScript(script, withGuide = true) {
   return new Promise((resolve) => {
     const child = execFile(
       BIN,
@@ -63,7 +63,7 @@ function runScript(script) {
         const content = [
           { type: "text", text: cap(out.trim() || "(no output — the script must console.log() what it wants back)") },
         ];
-        if (STARTS_TASK.test(script)) guide().then((text) => resolve({ content: [...content, { type: "text", text }] }));
+        if (withGuide && STARTS_TASK.test(script)) guide().then((text) => resolve({ content: [...content, { type: "text", text }] }));
         else resolve({ content });
       },
     );
@@ -94,6 +94,65 @@ These are the user's real logged-in accounts. Anything that sends, posts, buys, 
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
   },
   ({ script }) => runScript(script),
+);
+
+const savedNames = async () => {
+  try {
+    return (await readdir(SCRIPTS_DIR, { withFileTypes: true }))
+      .filter((d) => d.isFile() && d.name.endsWith(".js"))
+      .map((d) => d.name.slice(0, -3))
+      .filter((n) => NAME.test(n))
+      .sort();
+  } catch (e) {
+    if (e.code === "ENOENT") return [];
+    throw e;
+  }
+};
+const listing = async () => {
+  const names = await savedNames();
+  return names.length ? `Saved scripts: ${names.join(", ")}` : `No saved scripts in ${SCRIPTS_DIR}.`;
+};
+
+server.registerTool(
+  "ego_run_saved_script",
+  {
+    title: "Run a saved script in the ego lite browser",
+    description: `Run a script the user has saved and approved, by name. The script is fixed: you cannot change what it does, only choose which one to run. Its console.log() output comes back as the result.
+
+Call with no name to list the saved scripts.`,
+    inputSchema: {
+      name: z
+        .string()
+        .regex(NAME, "Use lowercase letters, digits, and hyphens only.")
+        .max(64)
+        .optional()
+        .describe("Saved script name, without .js. Omit to list them."),
+    },
+    // ponytail: read-only by operating rule, not by code. Only read-only scripts are placed in SCRIPTS_DIR (ADR 0003).
+    // A script that acts needs its own tool without this hint, kept out of "always allow".
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ name }) => {
+    if (name === undefined) return { content: [{ type: "text", text: await listing() }] };
+    const file = `${SCRIPTS_DIR}/${name}.js`;
+    let stat;
+    try {
+      stat = await lstat(file);
+    } catch (e) {
+      if (e.code !== "ENOENT") throw e;
+      return { content: [{ type: "text", text: `No saved script named "${name}". ${await listing()}` }], isError: true };
+    }
+    // リンクの先は配置の承認を経ずに変わりうるので、コピーされた通常のファイルだけを実行する（ADR 0003）。
+    // ponytail: SCRIPTS_DIR itself being a link is not checked; the docs make that an operating rule.
+    if (!stat.isFile())
+      return {
+        content: [{ type: "text", text: `"${name}" is not a plain file. Saved scripts must be copied into ${SCRIPTS_DIR}, not linked.` }],
+        isError: true,
+      };
+    const script = await readFile(file, "utf8");
+    // 保存済みスクリプトは最後まで自分で走るので、操作手順の添付は要らない。
+    return runScript(script, false);
+  },
 );
 
 await server.connect(new StdioServerTransport());
