@@ -4,7 +4,12 @@ Claude Desktop の Chat / Cowork から、ブラウザ [ego (lite)](https://lite
 
 ego lite 公式の `ego-browser` は skill 形式で、シェルを実行できる CLI エージェント（Claude Code、Codex など）向けに作られている。
 シェルを持たない Claude Desktop の Chat / Cowork からは、そのままでは使えない。
-このサーバは `ego-browser` CLI を子プロセスとして起動し、モデルが書いた JavaScript を渡して実行させることで、その欠けた実行手段を補う。
+このサーバは `ego-browser` CLI を子プロセスとして起動し、JavaScript を渡して実行させることで、その欠けた実行手段を補う。
+
+ツールは 2 本ある。
+
+- `ego_run_script`：Claude がその場で書いた JavaScript を実行する。
+- `ego_run_saved_script`：利用者が確かめて配置した保存済みスクリプトを、名前で実行する。中身は Claude には変えられない。
 
 設計の理由と経緯は [docs/design.md](docs/design.md) にある。
 
@@ -48,9 +53,32 @@ Claude Desktop が起動する子プロセスはログインシェルの環境�
 ## 安全上の注意
 
 このサーバは、ego lite に保存された**利用者本人のログイン済みアカウント**で操作する。
-送信・購入・削除に相当する操作もサーバ側では止めず、Claude Desktop がツール実行前に出す承認画面で、利用者がスクリプト全文を読んで判断する前提にしている。
+送信・購入・削除のような取り消せない書き込みも、サーバ側では止めない。
+歯止めは、Claude Desktop のコネクタ設定にある、ツールごとの許可設定である。
 
-そのため、**`ego_run_script` を「常に許可」に設定しないこと。** 設定した時点で歯止めがなくなる。
+| ツール | 許可設定 | 確認する時点 |
+|---|---|---|
+| `ego_run_script` | **その都度確認** | 実行のたびに、承認画面でスクリプト全文を読む |
+| `ego_run_saved_script` | 常に許可にしてよい | 配置のときに、スクリプトを読んでからコピーする |
+
+- **`ego_run_script` を「常に許可」に設定しないこと。** このツールは、ブラウザ操作に加えて、手元のファイルの読み書きと外部への送信もできる。設定した時点で歯止めがなくなる。
+- 実行用の場所には、読み取り操作だけを行うスクリプトを置く。`ego_run_saved_script` を常に許可にすると、置いたスクリプトはすべて確認なしで動く。読み取り操作だけであることは、サーバのコードでは確かめていない。
+- スケジュールタスクのような無人実行は、`ego_run_saved_script` だけで完結させる。`ego_run_script` を呼ぶと、承認待ちのまま止まる。
+
+## 保存済みスクリプトの配置
+
+保存済みスクリプトは、非公開の git リポジトリなどで書き、中身を読んでから実行用の場所へコピーする。
+
+```bash
+mkdir -p ~/.config/ego-lite-mcp/scripts
+cp my-script.js ~/.config/ego-lite-mcp/scripts/
+```
+
+- **シンボリックリンクにしないこと。** リンクは実行されない。リンクの先が承認なしに書き換わるのを防ぐためである。実行用の場所のフォルダ自体もリンクにしない。
+- 名前（`.js` を除いた部分）は、英小文字・数字・ハイフンだけで、64 文字までにする。
+- スクリプトは ego lite の中の Node.js で動く。作業ディレクトリは `/` で、環境変数は引き継がれないので、ファイルは絶対パスで指定する。失敗しても `finally` でタスクスペースを閉じる。書き方の規則は [docs/design.md](docs/design.md) の「保存済みスクリプト」の節にある。
+
+Claude Desktop で `ego_run_saved_script` を名前なしで呼ぶと、置かれているスクリプトの名前の一覧が返る。
 
 ## 動作確認
 
@@ -60,7 +88,8 @@ Claude Desktop が起動する子プロセスはログインシェルの環境�
 EGO_BROWSER_BIN="$(command -v ego-browser)" node test.mjs
 ```
 
-`initialize`、`tools/list`、`tools/call`（成功時と例外送出時）を順に検査し、問題がなければ `all checks passed` と出る。
+`initialize`、`tools/list`、`ego_run_script` の呼び出し（成功時と例外送出時）、`ego_run_saved_script` の呼び出し（一覧、不正な名前、存在しない名前、リンク、正常な実行）を順に検査し、問題がなければ `all checks passed` と出る。
+`ego_run_saved_script` の検査は一時ディレクトリで行い、実行用の場所には触れない。
 
 続いて Claude Desktop 上で、`ego_run_script` を 2 段階で呼ぶ。
 順番に意味がある。
