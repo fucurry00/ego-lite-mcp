@@ -2,14 +2,15 @@
 // Run: node test.mjs
 import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// The task-start comment checks that a saved script never gets the guide attached.
+// The taskSpace("x") comment in this script checks that a saved script never gets the guide attached.
 const scripts = mkdtempSync(join(tmpdir(), "ego-scripts-"));
 writeFileSync(join(scripts, "hello-1.js"), 'console.log("SAVED") // taskSpace("x")');
 writeFileSync(join(scripts, "notes.txt"), "not a script");
+writeFileSync(join(scripts, "Bad_Name.js"), "console.log(1)");
 
 const child = spawn("node", [new URL("server.mjs", import.meta.url).pathname], {
   stdio: ["pipe", "pipe", "inherit"],
@@ -85,6 +86,7 @@ const listing = await saved({});
 assert.equal(listing.isError, undefined);
 assert.match(listing.content[0].text, /hello-1/, "omitting the name lists saved scripts");
 assert.doesNotMatch(listing.content[0].text, /notes/, "only .js files are scripts");
+assert.doesNotMatch(listing.content[0].text, /Bad_Name/, "names the tool would reject are not listed");
 
 for (const name of ["../hello-1", "Hello", "a/b", "a.js", ""]) {
   const bad = await saved({ name });
@@ -102,4 +104,5 @@ assert.match(ran.content[0].text, /SAVED/);
 assert.equal(ran.content.length, 1, "no guide for a saved script");
 
 child.kill();
+rmSync(scripts, { recursive: true });
 console.log("all checks passed");

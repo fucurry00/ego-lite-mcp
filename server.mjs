@@ -10,6 +10,7 @@ const SKILL_DIR = `${homedir()}/.agents/skills/ego-browser`;
 const SKILL = `${SKILL_DIR}/SKILL.md`;
 // 保存済みスクリプトの実行用の場所。ここへの配置を利用者が承認する（ADR 0003）。
 const SCRIPTS_DIR = process.env.EGO_SCRIPTS_DIR || `${homedir()}/.config/ego-lite-mcp/scripts`;
+const NAME = /^[a-z0-9-]+$/;
 // 作業の開始＝新しいタスクスペースの作成か、利用者のスペースへの介入。taskSpace(23) の再開は含まない。
 // ponytail: literal match; taskSpace(nameVar) slips through. The description steers first calls to a literal.
 const STARTS_TASK = /\btaskSpace\(\s*["'`]|\b(?:listTaskSpaces|claimTaskSpace|takeOverTaskSpace)\s*\(/;
@@ -97,13 +98,13 @@ These are the user's real logged-in accounts. Anything that sends, posts, buys, 
 
 const savedNames = async () => {
   try {
-    return (await readdir(SCRIPTS_DIR)).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).sort();
+    return (await readdir(SCRIPTS_DIR)).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).filter((n) => NAME.test(n)).sort();
   } catch (e) {
     if (e.code === "ENOENT") return [];
     throw e;
   }
 };
-const available = async () => {
+const listing = async () => {
   const names = await savedNames();
   return names.length ? `Saved scripts: ${names.join(", ")}` : `No saved scripts in ${SCRIPTS_DIR}.`;
 };
@@ -118,21 +119,22 @@ Call with no name to list the saved scripts.`,
     inputSchema: {
       name: z
         .string()
-        .regex(/^[a-z0-9-]+$/, "Use lowercase letters, digits, and hyphens only.")
+        .regex(NAME, "Use lowercase letters, digits, and hyphens only.")
         .optional()
         .describe("Saved script name, without .js. Omit to list them."),
     },
     // ponytail: read-only by operating rule, not by code. Only read-only scripts are placed in SCRIPTS_DIR (ADR 0003).
+    // A script that acts needs its own tool without this hint, kept out of "always allow".
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
   async ({ name }) => {
-    if (name === undefined) return { content: [{ type: "text", text: await available() }] };
+    if (name === undefined) return { content: [{ type: "text", text: await listing() }] };
     let script;
     try {
       script = await readFile(`${SCRIPTS_DIR}/${name}.js`, "utf8");
     } catch (e) {
       if (e.code !== "ENOENT") throw e;
-      return { content: [{ type: "text", text: `No saved script named "${name}". ${await available()}` }], isError: true };
+      return { content: [{ type: "text", text: `No saved script named "${name}". ${await listing()}` }], isError: true };
     }
     // 保存済みスクリプトは最後まで自分で走るので、操作手順の添付は要らない。
     return runScript(script, false);
