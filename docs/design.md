@@ -25,8 +25,10 @@ CLI を起動するだけの薄いサーバで成立する。
 |---|---|
 | `server.mjs` | MCP サーバ本体 |
 | `test.mjs` | 標準入出力越しの疎通確認 |
-| `ego-browser-skill` | `~/.agents/skills/ego-browser` へのシンボリックリンク（複製ではない） |
 | `docs/` | 設計文書と解説 |
+
+手元では、リポジトリ直下に `~/.agents/skills/ego-browser` へのシンボリックリンク `ego-browser-skill` を置いてもよい。
+リンク先が利用者のホームディレクトリの絶対パスになるため、`.gitignore` で追跡から外している。
 
 ## ツールは `ego_run_script` の 1 本のみ
 
@@ -55,7 +57,6 @@ ego-browser nodejs -e 'console.log(await help("taskSpace"))'  # 1 項目のみ
 
 運用上の約束事（1 ゴールにつき 1 タスクスペース、観測は必要最小限、完了時の `finish({ keep: [] })` など）は `help()` には含まれず、`~/.agents/skills/ego-browser/SKILL.md` にのみある。
 これも複製せず、作業の開始時にサーバが実行時に読み出して結果に添付する（次節）。
-リポジトリ内の `ego-browser-skill` は、このディレクトリへのシンボリックリンクである。
 
 ## 運用手順は作業の開始時に結果へ添付する
 
@@ -132,7 +133,7 @@ ego-browser の埋め込み Node は、`console.log()` の出力を標準出力�
 デスクトップアプリが起動した子プロセスから ego lite の内部サービスに到達できており、懸念していたサンドボックスの制約には当たらなかった。
 第 2 段階では example.com を開き、スナップショットを取得し、`finish({ keep: [] })` でタスクスペースを閉じるところまで通っている。
 
-2026-10-15 の比較検証（起動コスト、まとめ実行と分割実行の所要時間）は [20261015-ego-lite-control-layer.html](20261015-ego-lite-control-layer.html) にある。
+2026-10-15 の比較検証（起動コスト、まとめ実行と分割実行の所要時間）は [ego-lite-control-layer.md](ego-lite-control-layer.md) にある。
 この解説は SKILL.md 添付の導入前に書いたもので、ツール説明文の記述はその時点のものである。
 
 ## 未検証事項

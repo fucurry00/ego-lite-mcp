@@ -90,12 +90,11 @@ await task.finish({ keep: [] });
 ## ドキュメント
 
 - [docs/design.md](docs/design.md)：設計の判断と経緯、未検証事項
-- [docs/20261015-ego-lite-control-layer.html](docs/20261015-ego-lite-control-layer.html)：ego-browser スキル、このサーバの実装、比較検証の解説（2026-10-15 時点）
+- [docs/ego-lite-control-layer.md](docs/ego-lite-control-layer.md)：ego-browser スキル、このサーバの実装、比較検証の解説（2026-10-15 時点）
 
 ## ライセンス
 
-[MIT](LICENSE)。ただし `docs/design-system/` は対象外である。
-これは数理の弾丸（mathbullet）氏の `html` スキルに含まれるデザインシステムで、権利は作者にある。
+[MIT](LICENSE)
 
 ## 参考
 
